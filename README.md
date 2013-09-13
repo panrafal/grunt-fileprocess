@@ -59,8 +59,10 @@ Type: `Function`
 Callback function called for every file. Parameters are: 
 
 - `file` - grunt's file object
-- `execute` - function executing shell commands (according to tasks's options)
+- `done` - function to call when processing is done
 
+Callback has access to `this` with:
+- `execute` - function to execute shell commands (according to tasks's options)
 
 #### stdout
 

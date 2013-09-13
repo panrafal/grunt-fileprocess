@@ -32,6 +32,14 @@ module.exports = function(grunt) {
 
     var self = this;
 
+    var asyncCb = self.async(),
+      asyncCount = 1,
+      asyncDone = function() {
+        if (--asyncCount == 0) {
+          asyncCb();
+        }
+      }
+
 
     function execute(cmd) {
       if (!_.isString(cmd)) {
@@ -39,16 +47,16 @@ module.exports = function(grunt) {
         return;
       }
 
-      var cb = self.async();
+      ++asyncCount;
 
       var cp = exec(cmd, options.execOptions, function (err, stdout, stderr) {
         if (_.isFunction(options.callback)) {
-          options.callback.call(this, err, stdout, stderr, cb);
+          options.callback.call(this, err, stdout, stderr, asyncDone);
         } else {
           if (err && options.failOnError) {
             grunt.warn(err);
           }
-          cb();
+          asyncDone();
         }
       });
 
@@ -75,6 +83,9 @@ module.exports = function(grunt) {
 
     }
 
+    var processCtx = {
+      execute: execute
+    }
 
     // Iterate over all specified file groups.
     this.files.forEach(function(file) {
@@ -96,7 +107,8 @@ module.exports = function(grunt) {
       grunt.file.mkdir(path.dirname(file.dest));
 
       if (options.process) {
-        options.process(file, execute);
+        ++asyncCount;
+        options.process.call(processCtx, file, asyncDone);
       }
       if (options.command) {
         var command;
@@ -114,6 +126,8 @@ module.exports = function(grunt) {
       grunt.verbose.ok('  OK');
 
     });
+
+    asyncDone();
   });
 
 };
