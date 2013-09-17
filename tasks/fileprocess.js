@@ -49,7 +49,10 @@ module.exports = function(grunt) {
 
       ++asyncCount;
 
+
       var cp = exec(cmd, options.execOptions, function (err, stdout, stderr) {
+        cp.stdout.removeAllListeners('data');
+        cp.stderr.removeAllListeners('data');
         if (_.isFunction(options.callback)) {
           options.callback.call(this, err, stdout, stderr, asyncDone);
         } else {
@@ -61,6 +64,8 @@ module.exports = function(grunt) {
       });
 
       var captureOutput = function (child, output) {
+        child.setMaxListeners(self.files.length);
+        output.setMaxListeners(self.files.length);
         if (grunt.option('color') === false) {
           child.on('data', function (data) {
             output.write(stripColors(data));
@@ -88,7 +93,7 @@ module.exports = function(grunt) {
     }
 
     // Iterate over all specified file groups.
-    this.files.forEach(function(file) {
+    this.files.forEach(function eachFile(file) {
 
       if (options.checkTimestamp) {
         var srcTime = _.max(_.map(file.src, function(f) {
