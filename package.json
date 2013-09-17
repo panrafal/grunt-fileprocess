@@ -1,7 +1,7 @@
 {
   "name": "grunt-fileprocess",
   "description": "Process only modified files using functions or shell commands",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "homepage": "https://github.com/panrafal/grunt-fileprocess",
   "author": {
     "name": "Rafal Lindemann",
