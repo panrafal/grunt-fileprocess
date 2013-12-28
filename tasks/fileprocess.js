@@ -19,7 +19,7 @@ module.exports = function(grunt) {
     fs = require('fs'),
     path = require('path'),
     exec = require('child_process').exec,
-    stripColors = require('stripcolorcodes')
+    stripColors = require('stripcolorcodes');
 
   grunt.registerMultiTask('fileprocess', 'Process only modified files with functions or shell commands', function() {
     // Merge task-specific and/or target-specific options with these defaults.
@@ -27,39 +27,39 @@ module.exports = function(grunt) {
       stdout: false,
       stderr: false,
       failOnError: true,
-      checkTimestamp: true
+      checkTimestamp: true,
+      asyncLimit: 4
     });
 
     var self = this;
 
-    var asyncCb = self.async(),
+    var asyncDone = self.async(),
       asyncCount = 1,
-      asyncDone = function() {
-        if (--asyncCount == 0) {
-          asyncCb();
-        }
-      }
+      asyncQueue = [];
 
-
-    function execute(cmd) {
+    function execute(cmd, callback) {
+      //console.log('execute', cmd);
       if (!_.isString(cmd)) {
-        _.each(cmd, execute);
+        _.each(cmd, function(item, i) {
+          asyncQueue.splice(i, 0, function(item) {
+            execute(cmd, callback);
+          });
+        });
+        if (callback) callback();
         return;
       }
-
-      ++asyncCount;
 
 
       var cp = exec(cmd, options.execOptions, function (err, stdout, stderr) {
         cp.stdout.removeAllListeners('data');
         cp.stderr.removeAllListeners('data');
         if (_.isFunction(options.callback)) {
-          options.callback.call(this, err, stdout, stderr, asyncDone);
+          options.callback.call(this, err, stdout, stderr, callback);
         } else {
           if (err && options.failOnError) {
             grunt.warn(err);
           }
-          asyncDone();
+          if (callback) callback();
         }
       });
 
@@ -112,8 +112,9 @@ module.exports = function(grunt) {
       grunt.file.mkdir(path.dirname(file.dest));
 
       if (options.process) {
-        ++asyncCount;
-        options.process.call(processCtx, file, asyncDone);
+        asyncQueue.push(function(cb) {
+          options.process.call(processCtx, file, cb);
+        });
       }
       if (options.command) {
         var command;
@@ -124,15 +125,40 @@ module.exports = function(grunt) {
             return _.template(command, {src: '"' + file.src[0] + '"', dest: '"' + file.dest + '"', file: file, grunt: grunt}, {interpolate: /{{([\s\S]+?)}}/g});
           });          
         }
-        // console.log(command);
-        execute(command);
+
+        if (_.isString(command)) {
+          command = [command];
+        }
+        _.each(command, function(cmd) {
+          asyncQueue.push(function(cb) {
+            execute(cmd, cb);
+          });
+        });
+
+
       }
 
       grunt.verbose.ok('  OK');
 
     });
 
-    asyncDone();
+    function runParallel(queue, limit, cb) {
+      var runNext = function runNext() {
+        //console.log('runNext', queue.length);
+        if (queue.length === 0) {
+          if (cb) cb();
+          cb = null;
+          return;
+        }
+        var next = queue.shift();
+        next(runNext);
+      };
+      for (var i = 0; i < Math.min(queue.length, limit); ++i) {
+        runNext();
+      }
+    }
+
+    runParallel(asyncQueue, options.asyncLimit, asyncDone);
   });
 
 };
